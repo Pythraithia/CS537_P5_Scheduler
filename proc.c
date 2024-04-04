@@ -415,7 +415,6 @@ scheduler(void)
     int i;
     int new_nice;
     struct proc *search_p;
-    int max_inv_priority; // Priority Inheritance value  
     acquire(&ptable.lock);
 
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){ // Find highest priorities out of runnable processes
