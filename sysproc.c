@@ -117,17 +117,18 @@ sys_macquire(void) {
   }
 
   struct proc *p = myproc();
+  pte_t* v_addr = walkpgdir(p->pgdir, (const void*)m, 0);
 
   // Try to acquire the spinlock within the mutex
   acquire(&m->lk);
 
   if(p->num_locks == 16)
     return -1; // No space for another lock, process has 16/16 locks
-  p->locks_held[p->num_locks] = m;
+  p->locks_held[p->num_locks] = V2P(v_addr);
   p->num_locks++;
 
   while(m->locked == 1) {
-	sleep(m, &m->lk);
+	  sleep(m, &m->lk);
   }
   m->locked = 1;
   release(&m->lk);	// Protects the sleeplock itself
@@ -145,16 +146,17 @@ sys_mrelease(void) {
   }
 
   struct proc *p = myproc();
+  pte_t* v_addr = walkpgdir(p->pgdir, (const void*)m, 0);
+  uint p_addr = V2P(v_addr);
 
   // Unlock
   acquire(&m->lk);
   m->locked = 0;
-  wakeup(m);
-  release(&m->lk);
+  
 
   int i;
   for(i = 0; i < MAXNUMLOCKS; i++){ // Find position of lock to remove
-    if(p->locks_held[i] == m){
+    if(p->locks_held[i] == p_addr){
       for(; i < p->num_locks - 1; i++){ // Remove lock and shift others down
         p->locks_held[i] = p->locks_held[i + 1];
       }
@@ -164,6 +166,8 @@ sys_mrelease(void) {
   }
   p->num_locks--;
 
+  wakeup(m);
+  release(&m->lk);
   return 0;
 }
 

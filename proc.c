@@ -95,7 +95,7 @@ found:
   p->chan = 0;
 
   p->nice = 0;      // Initialize nice value of process
-  p->old_nice = 0;
+  p->temp_nice = 0;
   p->num_locks = 0;
   for(int i = 0; i < MAXNUMLOCKS; i++){
     p->locks_held[i] = 0;
@@ -404,57 +404,58 @@ scheduler(void)
   struct cpu *c = mycpu();
   c->proc = 0;
 
+  // LATEST VERSION 2.0 - April 3rd 9:11pm
+
   for(;;){
     // Enable interrupts on this processor.
     sti();
     // START MODIFICATIONS
     int highest_priority = 20;
-    acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){ // Find highest priority out of runnable processes
-	    if ((p->nice < highest_priority) && (p->state == RUNNABLE))
-        highest_priority = p->nice;
-	  }
-
+    uint *locks;
     int i;
-    struct proc *temp_p;
-    int max_inv_priority = 21; // Priority Inversion value
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){ // Run the highest priority runnable process
-      if(p->state != RUNNABLE)
+    int new_nice;
+    struct proc *search_p;
+    int max_inv_priority; // Priority Inheritance value  
+    acquire(&ptable.lock);
+
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){ // Find highest priorities out of runnable processes
+	    if(p->state != RUNNABLE)
         continue;
-      if(p->nice != highest_priority)
-        continue;
-      // Process found at this point
-      p->old_nice = p->nice;
-      // CHECK PRIORITY INVERSION: Go thru all procs to see if they are waiting on any of the locks
-      // the current proc holds; its temporary priority is elevated to highest among waiting procs
-      for(i = 0; i < p->num_locks; i++){ // Go through each lock in current proc
-        for(temp_p = ptable.proc; temp_p < &ptable.proc[NPROC]; temp_p++){ // Go through all procs/threads
-          if(temp_p->state != RUNNABLE) // SLEEPING? idk
-            continue; // Actively waiting procs only
-          if(temp_p->nice >= p->nice)
-            continue; // Ignore lower priority procs, not relevant for Priority Inversion
-            
-          for(int j = 0; j < temp_p->num_locks; j++){ // Go through every lock in higher priority waiting proc
-            if(temp_p->locks_held[j] == p->locks_held[i]){ // If matching lock found, check max priority
-              if(temp_p->nice < max_inv_priority)
-                max_inv_priority = temp_p->nice; 
+
+      locks = p->locks_held;
+      new_nice = p->nice;
+
+      for(i = 0; i < p->num_locks; i++){ // Go through each lock in this proc
+        for(search_p = ptable.proc; search_p < &ptable.proc[NPROC]; search_p++){ // Go through all procs/threads
+          if(search_p->nice >= new_nice)
+            continue; // Ignore lower priority procs, not relevant 
+
+          for(int j = 0; j < search_p->num_locks; j++){ // Go through every lock in higher priority waiting proc
+            if(locks[i] == search_p->locks_held[j]){ // Matching lock found, update nice with higher priority proc
+              new_nice = search_p->nice; 
+              break;
             }
           }
         }
-      } 
-      if(max_inv_priority == 21){ // No matching locks found, revert Priority Inversion to prev value if needed
-        p->nice = p->old_nice; // Priority Restoration (does nothing if Priority Inversion wasn't used)
-      } else{ // Need to do Priority Inversion
-        p->nice = max_inv_priority; // Set temporary high priority
       }
-      // END OF MODIFICATIONS
+      p->temp_nice = new_nice; // Update temporary nice with Priority Inheritance if needed, otherwise revert
+
+      if(p->temp_nice < highest_priority)
+        highest_priority = p->temp_nice;
+	  }
+
+    
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){ // Run the highest priority runnable process
+      if(p->state != RUNNABLE)
+        continue;
+      if(p->temp_nice != highest_priority)
+        continue;
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
 
       c->proc = p;
-      // cprintf("Found something to run\n");
       switchuvm(p);
       p->state = RUNNING;
 

@@ -62,9 +62,9 @@ struct proc {
   int sleepticks;              // Number of ticks left the process should sleep for
 
   int nice;					   // Nice level for P5
-  int old_nice; // Priority Restoration
+  int temp_nice; // Priority Inheritance
   int num_locks;			   // Number of locks for P5
-  void* locks_held[MAXNUMLOCKS];	// Array of mutex held by the process P5  
+  uint locks_held[MAXNUMLOCKS];	// Array of mutex held by the process P5  
 };
 typedef struct {
   struct spinlock lock;
