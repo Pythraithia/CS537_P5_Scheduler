@@ -404,7 +404,7 @@ scheduler(void)
   struct cpu *c = mycpu();
   c->proc = 0;
 
-  // LATEST VERSION 2.0 - April 3rd 9:11pm
+  // LATEST VERSION 2.0 - April 3rd 9:28pm
 
   for(;;){
     // Enable interrupts on this processor.
